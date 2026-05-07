@@ -1,78 +1,67 @@
+from ursina import *
+from ursina.shaders import lit_with_shadows_shader
 import os
-import requests
-import re
-import json
+import shutil
 
-def generate_ursina_code(user_prompt):
-    # GitHub Secrets වලින් Token එක ලබා ගැනීම
-    token = os.getenv("GITHUB_TOKEN")
-    
-    # GitHub Models API Endpoint (GPT-4o සඳහා)
-    endpoint = "https://models.inference.ai.azure.com/chat/completions"
-    
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    # GPT-4o මොඩලය සඳහා අවශ්‍ය දත්ත
-    payload = {
-        "messages": [
-            {
-                "role": "system", 
-                "content": (
-                    "You are a professional Ursina Engine developer. "
-                    "Write ONLY pure Python code to create a 3D anime-style scene. "
-                    "Do NOT include 'app = Ursina()' or 'app.run()'. "
-                    "Focus on creating high-quality entities, animations, and shaders. "
-                    "Output ONLY the code inside triple backticks."
-                )
-            },
-            {"role": "user", "content": f"Create a 3D scene of: {user_prompt}"}
-        ],
-        "model": "gpt-4o", # මෙන්න මෙතන තමයි මොඩලය සඳහන් කරන්නේ
-        "temperature": 0.7,
-        "max_tokens": 2048
-    }
+# 1. පද්ධතිය සකස් කිරීම (Headless rendering setup)
+# දර්ශනයක් නොපෙන්වා සර්වර් එක ඇතුළේ වැඩ කිරීමට offscreen mode භාවිතා කරයි
+app = Ursina(window_type='offscreen', size=(1280, 720))
 
-    print(f"Requesting AI for: {user_prompt}")
+def run_render():
+    # 2. මූලික පරිසරය සැකසීම
+    Sky()
+    # ආලෝකය සැකසීම (Shader Error මඟහැරීමට ප්ලැට්ෆෝම් එකට ගැලපෙන ලෙස)
+    sun = DirectionalLight()
+    sun.look_at(Vec3(1, -1, 1))
     
-    try:
-        response = requests.post(endpoint, headers=headers, json=payload)
+    print("Alpha AI Renderer active - Developed by Hasith")
+    
+    # 3. GPT-4 ජනනය කළ ඇනිමේෂන් කෝඩ් එක ක්‍රියාත්මක කිරීම
+    if os.path.exists("animation_logic.py"):
+        print("Executing AI generated logic...")
+        try:
+            with open("animation_logic.py", "r") as f:
+                exec(f.read())
+        except Exception as e:
+            print(f"Error in animation logic: {e}")
+            # වැරැද්දක් වුණොත් පෙන්වීමට මූලික වස්තුවක්
+            Entity(model='sphere', color=color.cyan, y=1)
+    else:
+        print("Warning: animation_logic.py not found!")
+        Entity(model='cube', color=color.red)
+
+    # 4. වීඩියෝ රාමු (Frames) සුරැකීමට ෆෝල්ඩරය සකස් කිරීම
+    frames_dir = 'frames'
+    if os.path.exists(frames_dir):
+        shutil.rmtree(frames_dir) # පරණ ඒවා මකා දැමීම
+    os.mkdir(frames_dir)
+    
+    # 5. රෙන්ඩර් කිරීමේ ක්‍රියාවලිය (තත්පර 5ක වීඩියෝවක් - 150 frames)
+    print("Starting frame capture...")
+    for i in range(150):
+        # එන්ජිම එක පියවරක් ඉදිරියට ගෙන යාම
+        app.step()
+        # ෆ්‍රේම් එක පින්තූරයක් ලෙස සේව් කිරීම
+        image_path = os.path.join(frames_dir, f'f_{i:04d}.png')
+        base.screenshot(image_path, defaultFilename=False)
         
-        # මෙතනදී අපි API එකේ Response එක හරියටම පරීක්ෂා කරනවා
-        if response.status_code != 200:
-            print(f"Error from API: {response.status_code}")
-            print(f"Response: {response.text}")
-            return
+        if i % 30 == 0:
+            print(f"Rendered {i} frames...")
 
-        result = response.json()
-        
-        # 'choices' තිබේදැයි පරීක්ෂා කර කෝඩ් එක වෙන් කර ගැනීම
-        if 'choices' in result:
-            full_text = result['choices'][0]['message']['content']
-            
-            # Markdown Code Blocks වලින් කෝඩ් එක පමණක් වෙන් කර ගැනීම
-            code_match = re.search(r"```python\n(.*?)\n```", full_text, re.DOTALL)
-            if not code_match:
-                code_match = re.search(r"```\n(.*?)\n```", full_text, re.DOTALL)
-            
-            final_code = code_match.group(1) if code_match else full_text
-            
-            # පද්ධතිය විසින් සාදන ලද බව තහවුරු කිරීමට කමෙන්ට් එකක් එක් කිරීම
-            final_code = f"# Created by Hasith - Alpha AI\n{final_code}"
-            
-            with open("animation_logic.py", "w") as f:
-                f.write(final_code)
-            print("Successfully generated animation_logic.py")
-        else:
-            print("Unexpected API Response Format. No 'choices' found.")
-            print(json.dumps(result, indent=2))
-
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+    # 6. FFmpeg මගින් වීඩියෝව නිපදවීම
+    print("Encoding video using FFmpeg...")
+    # පින්තූර 150 එකතු කර output.mp4 සාදයි
+    ffmpeg_cmd = (
+        "ffmpeg -y -framerate 30 -i frames/f_%04d.png "
+        "-c:v libx264 -pix_fmt yuv420p -crf 23 output.mp4"
+    )
+    
+    return_code = os.system(ffmpeg_cmd)
+    
+    if return_code == 0:
+        print("Alpha AI: Video generation completed successfully! (output.mp4)")
+    else:
+        print("Alpha AI: Error during video encoding.")
 
 if __name__ == "__main__":
-    # Workflow එකෙන් එවන Prompt එක ලබා ගැනීම
-    prompt = os.getenv("USER_PROMPT", "A simple 3D anime scene")
-    generate_ursina_code(prompt)
+    run_render()

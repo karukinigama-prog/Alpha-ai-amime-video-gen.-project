@@ -25,12 +25,13 @@ jobs:
           
       - name: AI Code Generation & Rendering
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # මෙතනට ඔයා Settings වල හැදූ Secret නම හරියටම තියෙන්න ඕනේ
+          GITHUB_TOKEN: ${{ secrets.ALPHA_AI_TOKEN }} 
           USER_PROMPT: ${{ github.event.inputs.user_prompt }}
         run: |
-          # මුලින්ම GPT-4 එකෙන් කෝඩ් එක හදාගන්නවා
+          # GPT-4 මගින් කෝඩ් එක ජනනය කිරීම
           python generator.py
-          # ඊළඟට ඒ කෝඩ් එක Ursina වලින් රන් කරලා වීඩියෝව හදනවා
+          # Ursina මගින් වීඩියෝව Render කිරීම
           xvfb-run -s "-screen 0 1280x720x24" python renderer.py
           
       - name: Upload Anime Video

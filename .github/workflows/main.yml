@@ -21,18 +21,16 @@ jobs:
       - name: Install System Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg xvfb libasound2
+          # libasound2 වෙනුවට libasound2t64 හෝ libasound2* ලෙස භාවිත කිරීමෙන් Error එක නැති වේ
+          sudo apt-get install -y ffmpeg xvfb libasound2t64 || sudo apt-get install -y ffmpeg xvfb libasound2
           pip install ursina requests
           
       - name: AI Code Generation & Rendering
         env:
-          # ඔබ Settings වල සැකසූ Secret එකේ නම මෙහි තිබිය යුතුය
           GITHUB_TOKEN: ${{ secrets.ALPHA_AI_TOKEN }} 
           USER_PROMPT: ${{ github.event.inputs.user_prompt }}
         run: |
-          # GPT-4 මගින් කෝඩ් එක ලබා ගැනීම
           python generator.py
-          # වීඩියෝව Render කිරීම
           xvfb-run -s "-screen 0 1280x720x24" python renderer.py
           
       - name: Upload Anime Video
